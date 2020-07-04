@@ -1,11 +1,13 @@
 {
   "compilerOptions": {
-    "lib": ["es2015"], // コードを実行する環境にTSCが存在すると想定するAPIはどれですか？
+    "lib": ["es2015", "DOM"], // コードを実行する環境にTSCが存在すると想定するAPIはどれですか？
     "module": "commonjs", // TSCがコードをコンパイルするモジュールシステムはどれですか?
     "outDir": "dist", // TSCが生成されたJavaScriptコードを配置するフォルダーはどれですか？
     "sourceMap": true,
     "strict": true,
-    "target": "es2015" // TSCがコードをコンパイルするJavaScriptバージョンはどれですか
+    "target": "es2015", // TSCがコードをコンパイルするJavaScriptバージョンはどれですか
+    "moduleResolution": "node",
+    "resolveJsonModule": true
   },
   "include": [ // TypeScriptファイルを見つけるために、TSCはどのフォルダーを調べる必要がありますか？
     "src"
