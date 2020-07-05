@@ -1,0 +1,15 @@
+{
+  "targets": [
+    {
+      "domain":"haraheri.net",
+      "url":"https://haraheri.net/"},
+    {
+      "domain":"tokyolucci.jp",
+      "url":"https://tokyolucci.jp/"
+    },
+    {
+      "domain":"folio-sec.com",
+      "url":"https://folio-sec.com/"
+    }
+  ]
+}

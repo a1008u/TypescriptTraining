@@ -1,0 +1,8 @@
+version: '3'
+services:
+  typescript_puppeteer:
+    privileged: true
+    build: .
+    shm_size: 756m # 一時ファイル格納サイズを大きくする
+    volumes:
+      - ./output:/app/output

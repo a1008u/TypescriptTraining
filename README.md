@@ -7,7 +7,7 @@ npm install --save-dev typescript @types/node
 npm install --save-dev eslint @typescript-eslint/eslint-plugin @typescript-eslint/parser prettier eslint-config-prettier eslint-plugin-prettier
 npm install --save-dev jest @types/jest ts-jest
 
-npm install puppeteer
+npm install --save puppeteer
 npm install --save-dev @types/puppeteer
 ```
 

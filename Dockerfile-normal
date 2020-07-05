@@ -1,0 +1,23 @@
+# -------------------------------
+# typescriptのトランスパイル用
+# -------------------------------
+FROM node:12.18.1-alpine3.12 AS build
+
+WORKDIR /app
+COPY . /app
+# RUN npm ci && npm run build
+RUN npm run build
+
+# -------------------------------
+# トランスパイルコードの実行用
+# -------------------------------
+FROM node:12.18.1-alpine3.12
+
+WORKDIR /app
+# ENV JWT_SECRET="dummy" PORT="80"
+COPY --from=build /app/dist /app/dist
+COPY package.json /app
+COPY package-lock.json /app
+# RUN npm ci --production
+
+CMD ["npm","startPuppeteer"]
