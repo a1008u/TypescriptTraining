@@ -3,185 +3,152 @@ import * as site from "./json/site.json";
 import { TARGET } from "~/src/puppeteer/json/url.json";
 import * as fs from "fs";
 
-const main = async () => {
-  console.log("main start");
-  // 事前準備
-  // const browser = await puppeteer.launch({ headless: true });
-  // const page = await browser.newPage();
-  // await page.emulate(puppeteer.devices["iPhone X"]);
+async function mkBrowserAndPage() {
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: process.env.CHROME_BIN,
+    args: [
+      "--no-sandbox",
+      "--headless",
+      "--disable-gpu",
+      "--disable-dev-shm-usage",
+    ],
+  });
+  const page = await browser.newPage();
+  return { browser, page };
+}
 
-  // urlが動的になれば複数のサイトで利用できる。
-  // const url = "https://tokyolucci.jp/";
+const outputFile = (path: string, jsonStringify: string) => {
+  fs.writeFileSync(path, jsonStringify);
+};
 
-  async function exec(site: TARGET): Promise<metainfo[]> {
-    const browser = await puppeteer.launch({
-      headless: true,
-      executablePath: process.env.CHROME_BIN,
-      args: [
-        "--no-sandbox",
-        "--headless",
-        "--disable-gpu",
-        "--disable-dev-shm-usage",
-      ],
-    });
-    const page = await browser.newPage();
-    await page.emulate(puppeteer.devices["iPhone X"]);
-    console.log(site.url);
-    // const response = await page.goto(site.url, { waitUntil: "networkidle2" });
-    // "load" | "domcontentloaded" | "networkidle0" | "networkidle2" | LoadEvent[] | undefined'.
-    const response = await page.goto(site.url, { waitUntil: "networkidle0" });
-    console.log(response?.status());
+async function pageConfig(page: puppeteer.Page) {
+  await page.emulate(puppeteer.devices["iPhone X"]);
+  await page.emulateTimezone("Asia/Tokyo");
+}
 
-    // screenshot
-    const name: string = site.domain.replace(".", "_");
-    await page.screenshot({
-      path: `./output/screenshot/${name}.png`,
-      fullPage: true,
-    });
+async function getAllDom(page: puppeteer.Page, name: string) {
+  return await page.$eval("html", (item) => item.innerHTML);
+}
 
-    // タグ取得
-    const targetTag = "#xxx";
-    const item = await page.$(targetTag);
-    if (item) {
-      console.log(item);
-      const data = await (await item.getProperty("src")).jsonValue();
-      console.log("------ ", data);
-    }
+async function outputPageAllDom(page: puppeteer.Page, domainName: string) {
+  const html_dom = await getAllDom(page, domainName);
+  outputFile(`./output/dom/${domainName}.txt`, html_dom);
+}
 
-    // meta取得
-    const result = await page.evaluate(() => {
-      const results: metainfo[] = [];
-      document.querySelectorAll("meta").forEach((meta: HTMLMetaElement) => {
-        results.push({
-          name: meta.getAttribute("name"),
-          content: meta.getAttribute("content"),
-          charset: meta.getAttribute("charset"),
-          httpEquiv: meta.getAttribute("http-equiv"),
-          property: meta.getAttribute("property"),
-        });
-      });
-      return results;
-    });
-    // console.log(result);
+async function getScreenShot(page: puppeteer.Page, name: string) {
+  await page.screenshot({
+    path: `./output/screenshot/${name}.png`,
+    fullPage: true,
+  });
+}
 
-    console.log("main end");
-    await browser.close();
-
-    const jsonStringify = JSON.stringify(result);
-    fs.writeFileSync(`./output/meta/${name}.json`, jsonStringify);
-
-    return result;
+async function getTargetTag(page: puppeteer.Page, targetTag: string) {
+  const item = await page.$(targetTag);
+  if (item) {
+    const data = (await item.getProperty("src")).jsonValue;
+    console.log("------ ", data);
   }
+}
 
-  const processAll = async function (targetSites: TARGET[]) {
-    const x = await Promise.all([
-      exec(targetSites[0]),
-      exec(targetSites[1]),
-      exec(targetSites[2]),
-    ]);
-    return x;
-  };
+function getMetaData(page: puppeteer.Page) {
+  return page.evaluate(() => {
+    const results: metainfo[] = [];
+    document.querySelectorAll("meta").forEach((meta: HTMLMetaElement) => {
+      results.push({
+        name: meta.getAttribute("name"),
+        content: meta.getAttribute("content"),
+        charset: meta.getAttribute("charset"),
+        httpEquiv: meta.getAttribute("http-equiv"),
+        property: meta.getAttribute("property"),
+      });
+    });
+    return results;
+  });
+}
 
+async function outputPageMetadata(page: puppeteer.Page, domainName: string) {
+  const result = await getMetaData(page);
+  const jsonStringify = JSON.stringify(result);
+  outputFile(`./output/meta/${domainName}.json`, jsonStringify);
+  return result;
+}
+
+const targetTag = "#xxx";
+
+const processAll = async function (page: puppeteer.Page, domainName: string) {
+  const metainfo = await Promise.all([
+    await outputPageAllDom(page, domainName),
+    await getTargetTag(page, targetTag),
+    await getScreenShot(page, domainName),
+    await outputPageMetadata(page, domainName),
+  ]);
+  return metainfo;
+};
+
+async function exec(site: TARGET): Promise<metainfo[]> {
+  const { browser, page } = await mkBrowserAndPage();
+  await pageConfig(page);
+
+  // const response = await page.goto(site.url, { waitUntil: "networkidle2" });
+  // "load" | "domcontentloaded" | "networkidle0" | "networkidle2" | LoadEvent[] | undefined'.
+  const response = await page.goto(site.url, { waitUntil: "networkidle0" });
+  console.log(response?.status());
+
+  const domainName: string = site.domain.replace(".", "_");
+  console.log(await page.metrics());
+
+  // タグ取得
+  const metainfo = await processAll(page, domainName);
+
+  await browser.close();
+  return metainfo[3];
+}
+
+const concurrentPromise = async <T>(
+  promises: (() => Promise<T>)[],
+  concurrency: number
+): Promise<T[]> => {
+  const results: T[] = [];
+  let currentIndex = 0;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const chunks = promises.slice(currentIndex, currentIndex + concurrency);
+    if (chunks.length === 0) {
+      break;
+    }
+    Array.prototype.push.apply(
+      results,
+      await Promise.all(chunks.map((c) => c()))
+    );
+    currentIndex += concurrency;
+  }
+  return results;
+};
+
+const main = async () => {
+  const startTime = performance.now();
+  console.log("main start");
   // main処理
-  const re = await processAll(site.targets);
-  console.log(re);
+  // const processAll = async function (targetSites: TARGET[]) {
+  //   const x = await Promise.all([
+  //     exec(targetSites[0]),
+  //     exec(targetSites[1]),
+  //     exec(targetSites[2]),
+  //   ]);
+  //   return x;
+  // };
+  // const re = await processAll(site.targets);
+  // console.log(re);
 
-  // urls.targetUrl.forEach(async (url) => {
-  // const browser = await puppeteer.launch({ headless: true });
-  // const page = await browser.newPage();
-  // await page.emulate(puppeteer.devices["iPhone X"]);
-  // console.log(url);
-  // const response = await page.goto(url, { waitUntil: "networkidle2" });
-  // console.log(response?.status());
-  // // タグ取得
-  // const targetTag = "#xxx";
-  // const item = await page.$(targetTag);
-  // if (item) {
-  //   console.log(item);
-  //   const data = await (await item.getProperty("src")).jsonValue();
-  //   console.log("------ ", data);
-  // }
-  // // meta取得
-  // const result = await page.evaluate(() => {
-  //   const results: metainfo[] = [];
-  //   document.querySelectorAll("meta").forEach((meta: HTMLMetaElement) => {
-  //     results.push({
-  //       name: meta.getAttribute("name"),
-  //       content: meta.getAttribute("content"),
-  //       charset: meta.getAttribute("charset"),
-  //       httpEquiv: meta.getAttribute("http-equiv"),
-  //       property: meta.getAttribute("property"),
-  //     });
-  //   });
-  //   return results;
-  // });
-  // console.log(result);
-  // console.log("main end");
-  // await browser.close();
-  // });
+  // 並列処理を調整して実行させる。
+  const promises = site.targets.map((site) => exec.bind(null, site));
+  await concurrentPromise(promises, 5);
 
-  // タグ確認
-  // const targetTag = "#xxx";
-  // const item = await page.$(targetTag);
-  // if (item) {
-  //   console.log(item);
-  //   const data = await (await item.getProperty("src")).jsonValue();
-  //   console.log("------ ", data);
-  // }
-
-  // const result = await page.evaluate(() => {
-  //   const x = document.querySelector('meta[name="description"]');
-  //   if (x) {
-  //     return [x.getAttribute("content")];
-  //   }
-  // });
-  // if (result) {
-  //   result.forEach((r) => console.log(r));
-  // }
-  // const result = await page.evaluate(() => {
-  //   const results: metainfo[] = [];
-  //   document.querySelectorAll("meta").forEach((meta: HTMLMetaElement) => {
-  //     results.push({
-  //       name: meta.getAttribute("name"),
-  //       content: meta.getAttribute("content"),
-  //       charset: meta.getAttribute("charset"),
-  //       httpEquiv: meta.getAttribute("http-equiv"),
-  //       property: meta.getAttribute("property"),
-  //     });
-  //   });
-  //   return results;
-  // });
-  // console.log(result);
-  // result.forEach((x) => console.log(x.getAttribute("content")));
-
-  // metas.forEach(async (meta) => {
-  //   console.log(meta);
-  //   // console.log((await meta.getProperty("content")).jsonValue());
-  // });
-
-  // 実際のスクレイピング
-  // const url = "https://google.com/";
-  // await page.goto(url, { waitUntil: "networkidle0" });
-
-  // await page.waitFor('input[name="q"]');
-  // await page.type('input[name="q"]', "iphone");
-
-  // await page.screenshot({ path: "home1.png" });
-
-  // // await page.title() でも良い
-  // // const title = await page.$eval("head > title", (e) => e.text);
-  // const title = await page.title();
-  // console.log("title is the ", title);
-
-  // const cal: puppeteer.ElementHandle | null = await page.$("html");
-  // if (cal) {
-  //   (await cal.$$("div")).forEach((x) => console.log(x));
-  // }
-
-  // // console.log(cal);
-
-  // console.log("main end");
-  // await browser.close();
+  console.log("main end");
+  const endTime = performance.now();
+  console.log("time: ", endTime - startTime);
 };
 
 main();

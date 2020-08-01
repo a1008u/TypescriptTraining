@@ -30,7 +30,7 @@ RUN set -x \
     udev \
     ttf-freefont \
     chromium \
-    && npm install puppeteer@1.19.0
+    && npm install puppeteer
 
 # Japanese font
 RUN mkdir /noto
