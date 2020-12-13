@@ -3,6 +3,9 @@ import * as site from "./json/site.json";
 import { TARGET } from "~/src/puppeteer/json/url.json";
 import * as fs from "fs";
 
+import { performance } from "perf_hooks";
+import {JSHandle} from "puppeteer";
+
 async function mkBrowserAndPage() {
   const browser = await puppeteer.launch({
     headless: true,
@@ -33,7 +36,7 @@ async function getAllDom(page: puppeteer.Page, name: string) {
 
 async function outputPageAllDom(page: puppeteer.Page, domainName: string) {
   const html_dom = await getAllDom(page, domainName);
-  outputFile(`./output/dom/${domainName}.txt`, html_dom);
+  outputFile(`./output/dom/${domainName}.html`, html_dom);
 }
 
 async function getScreenShot(page: puppeteer.Page, name: string) {
@@ -74,6 +77,44 @@ async function outputPageMetadata(page: puppeteer.Page, domainName: string) {
   return result;
 }
 
+async function getTextFromPage(page: puppeteer.Page, domainName: string) {
+  console.log("ーーーーーーーーーーーーーgetTextFromPageを実行 start");
+
+  const childrenNames = await page.evaluate((selector) => {
+    const names = [];
+    for (const element of document.querySelector(selector).children) {
+      names.push(element.tagName);
+    }
+    return names;
+  }, "body");
+  console.log(childrenNames);
+
+  const childrenNames2 = await page.evaluate((selector) => {
+    const names: string[] = [];
+    for (const element of document.querySelector(selector).children) {
+      if (element.tagName === "DIV" || element.tagName === "META") {
+        names.push(element.textContent);
+      } else {
+        console.log(element.tagName);
+      }
+    }
+    return names;
+  }, "body");
+  console.log("ーーーーーーー" + childrenNames2);
+
+  async function getText(dataset: string[]) {
+    let cd = "";
+    dataset.forEach((d) => {
+      if (d) {
+        cd = `${cd + d} -- `;
+      }
+    });
+    return cd;
+  }
+  const cd = await getText(childrenNames2);
+  outputFile(`./output/text/${domainName}.txt`, cd);
+}
+
 const targetTag = "#xxx";
 
 const processAll = async function (page: puppeteer.Page, domainName: string) {
@@ -82,6 +123,7 @@ const processAll = async function (page: puppeteer.Page, domainName: string) {
     await getTargetTag(page, targetTag),
     await getScreenShot(page, domainName),
     await outputPageMetadata(page, domainName),
+    await getTextFromPage(page, domainName),
   ]);
   return metainfo;
 };
@@ -95,10 +137,10 @@ async function exec(site: TARGET): Promise<metainfo[]> {
   const response = await page.goto(site.url, { waitUntil: "networkidle0" });
   console.log(response?.status());
 
-  const domainName: string = site.domain.replace(".", "_");
   console.log(await page.metrics());
 
   // タグ取得
+  const domainName: string = site.domain.replace(".", "_");
   const metainfo = await processAll(page, domainName);
 
   await browser.close();
