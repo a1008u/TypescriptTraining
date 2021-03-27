@@ -1,15 +1,28 @@
-import * as puppeteer from "puppeteer";
+// import * as puppeteer from "puppeteer";
+import * as puppeteer from "puppeteer-core";
 import * as site from "./json/site.json";
 import { TARGET } from "~/src/puppeteer/json/url.json";
 import * as fs from "fs";
 
 import { performance } from "perf_hooks";
-import {JSHandle} from "puppeteer";
+import { JSHandle } from "puppeteer";
 
 async function mkBrowserAndPage() {
+  // const browser = await puppeteer.launch({
+  //   headless: true,
+  //   executablePath: process.env.CHROME_BIN,
+  //   args: [
+  //     "--no-sandbox",
+  //     "--headless",
+  //     "--disable-gpu",
+  //     "--disable-dev-shm-usage",
+  //   ],
+  // });
+
   const browser = await puppeteer.launch({
     headless: true,
-    executablePath: process.env.CHROME_BIN,
+    executablePath:
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     args: [
       "--no-sandbox",
       "--headless",
@@ -17,6 +30,7 @@ async function mkBrowserAndPage() {
       "--disable-dev-shm-usage",
     ],
   });
+
   const page = await browser.newPage();
   return { browser, page };
 }
@@ -48,10 +62,11 @@ async function getScreenShot(page: puppeteer.Page, name: string) {
 
 async function getTargetTag(page: puppeteer.Page, targetTag: string) {
   const item = await page.$(targetTag);
-  if (item) {
-    const data = (await item.getProperty("src")).jsonValue;
-    console.log("------ ", data);
-  }
+  console.log(item)
+  // if (item) {
+  //   const data = (await item.getProperty("src")).jsonValue;
+  //   console.log("------ ", data);
+  // }
 }
 
 function getMetaData(page: puppeteer.Page) {
